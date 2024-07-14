@@ -1,0 +1,210 @@
+-- create database
+IF NOT EXISTS(SELECT name FROM master.sys.databases where name = 'TestDB')
+	BEGIN
+		CREATE DATABASE TestDB
+	END
+
+-- create table
+use TestDB
+go
+IF NOT EXISTS(SELECT name FROM master.sys.tables where name = 'Test')
+	BEGIN
+		CREATE TABLE TestDB.dbo.Test(
+		Id int primary key identity(1,1),
+		JsonData nvarchar(MAX)
+		)
+	END
+go
+
+-- insert inital data
+use TestDB
+go
+INSERT INTO Test(JsonData) VALUES('{
+    "arabalar": [
+        {
+            "marka": "Toyota",
+            "model": "Corolla",
+            "yil": 2024,
+            "motor": {
+                "tipi": "Benzin",
+                "hacim": "1.8L",
+                "guc": "140 HP"
+            },
+            "renk": "Gri",
+            "fiyat": 35000,
+            "kilometre": 0,
+            "donanim": {
+                "airbag": true,
+                "klima": true,
+                "navigation": false,
+                "kamera": true,
+                "cruise_control": true
+            },
+            "satilik": true,
+            "garanti": {
+                "sure": "3 yil",
+                "kilometre": "100,000 km"
+            },
+            "satici": {
+                "isim": "Otomotiv Satis AS",
+                "telefon": "+90 212 123 4567",
+                "email": "info@otomotivsatis.com"
+            }
+        },
+        {
+            "marka": "BMW",
+            "model": "X5",
+            "yil": 2023,
+            "motor": {
+                "tipi": "Dizel",
+                "hacim": "3.0L",
+                "guc": "265 HP"
+            },
+            "renk": "Siyah",
+            "fiyat": 70000,
+            "kilometre": 15000,
+            "donanim": {
+                "airbag": true,
+                "klima": true,
+                "navigation": true,
+                "kamera": true,
+                "cruise_control": true
+            },
+            "satilik": true,
+            "garanti": {
+                "sure": "5 yil",
+                "kilometre": "150,000 km"
+            },
+            "satici": {
+                "isim": "Premium Araclar",
+                "telefon": "+90 212 765 4321",
+                "email": "contact@premiumaraclar.com"
+            }
+        },
+        {
+            "marka": "Audi",
+            "model": "A4",
+            "yil": 2022,
+            "motor": {
+                "tipi": "Benzin",
+                "hacim": "2.0L",
+                "guc": "190 HP"
+            },
+            "renk": "Beyaz",
+            "fiyat": 45000,
+            "kilometre": 5000,
+            "donanim": {
+                "airbag": true,
+                "klima": true,
+                "navigation": true,
+                "kamera": false,
+                "cruise_control": true
+            },
+            "satilik": false,
+            "garanti": {
+                "sure": "2 yil",
+                "kilometre": "80,000 km"
+            },
+            "satici": {
+                "isim": "Audi Yetkili Servis",
+                "telefon": "+90 212 987 6543",
+                "email": "sales@audiyetkiliservis.com"
+            }
+        }
+    ]
+}
+
+')
+go
+
+--ListTestData SP
+use TestDB
+GO
+CREATE PROCEDURE ListTestData
+AS
+BEGIN
+	SELECT Id,JsonData FROM Test
+END
+GO
+
+--GetByMarka SP
+use TestDB
+GO
+CREATE PROCEDURE GetByMarka
+@marka nvarchar(50)
+AS
+BEGIN
+SELECT
+        COALESCE(
+            JSON_QUERY(
+                (SELECT 
+                    araba.marka,
+                    araba.model,
+                    araba.yil,
+                    araba.motor,
+                    araba.renk,
+                    araba.fiyat,
+                    araba.kilometre,
+                    araba.donanim,
+                    araba.satilik,
+                    araba.garanti,
+                    araba.satici
+                FROM 
+                    Test
+                CROSS APPLY 
+                    OPENJSON(JsonData, '$.arabalar')
+                    WITH (
+                        marka NVARCHAR(50) '$.marka',
+                        model NVARCHAR(50) '$.model',
+                        yil INT '$.yil',
+                        motor NVARCHAR(MAX) '$.motor' as JSON,
+                        renk NVARCHAR(50) '$.renk',
+                        fiyat DECIMAL(18,2) '$.fiyat',
+                        kilometre INT '$.kilometre',
+                        donanim NVARCHAR(MAX) '$.donanim' as JSON,
+                        satilik BIT '$.satilik',
+                        garanti NVARCHAR(MAX) '$.garanti' as JSON,
+                        satici NVARCHAR(MAX) '$.satici' as JSON
+                    ) AS araba
+                WHERE 
+                    araba.marka = @marka
+                FOR JSON PATH, ROOT('arabalar')
+                )
+            ), 
+            null
+        ) AS 'JsonData'
+END
+GO
+
+-- InsertData SP
+use TestDB
+GO
+CREATE PROCEDURE InsertData
+@jsonData nvarchar(max)
+AS
+BEGIN
+	INSERT INTO Test(JsonData) Values(@jsonData)
+END
+GO
+
+--DeleteData SP
+use TestDB
+GO
+CREATE PROCEDURE DeleteData
+@id int
+AS
+BEGIN
+	DELETE FROM Test WHERE Id = @id
+END
+GO
+
+--UpdateData SP
+use TestDB
+GO
+CREATE PROCEDURE UpdateData
+@id int,@jsonData nvarchar(max)
+AS
+BEGIN
+	UPDATE Test SET JsonData=@jsonData WHERE Id = @id
+END
+GO
